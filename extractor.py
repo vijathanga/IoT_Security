@@ -33,17 +33,17 @@ class Filter:
             if not bProt: return False
 
         if (self.devIP != None or self.srcIP != None or self.dstIP != None):
-            if (not pkt.haslayer(IP)):
+            if (not pkt.haslayer("IP")):
                 return False
 
             if (self.devIP != None):
-                if (pkt[IP].src != self.devIP  and  pkt[IP].dst != self.devIP):
+                if (pkt["IP"].src != self.devIP  and  pkt["IP"].dst != self.devIP):
                     return False
 
-            if (self.srcIP != None and pkt[IP].src != self.srcIP):
+            if (self.srcIP != None and pkt["IP"].src != self.srcIP):
                 return False
 
-            if (self.dstIP != None and pkt[IP].dst != self.srcIP):
+            if (self.dstIP != None and pkt["IP"].dst != self.srcIP):
                 return False
 
         
@@ -58,10 +58,10 @@ class Flow:
     __prot = [ 'nil', 'ICMP', 'ARP', 'UDP', 'SDP', 'EFK', 'TCP' ]
 
     def __init__(self, pkt):
-        self.src = pkt[IP].src
-        self.dst = pkt[IP].dst
+        self.src = pkt['IP'].src
+        self.dst = pkt['IP'].dst
 
-        self.prot = self.__prot[ pkt[IP].proto ]
+        self.prot = self.__prot[ pkt['IP'].proto ]
 
         # TCP attirbutes
         self.TcpFlag = [0] * 8  
@@ -130,7 +130,7 @@ class Flow:
     def extractAttr(self, pkt):
 
         if self.prot == 'TCP':
-            flag = pkt[TCP].flags
+            flag = pkt['TCP'].flags
 
             if (flag & self.SYN and not flag & self.ACK):
                 self.TcpFlag[self.syn] = self.TcpFlag[self.syn] + 1
@@ -149,24 +149,24 @@ class Flow:
             if (flag & self.CWR):
                 self.TcpFlag[self.cwr] = self.TcpFlag[self.cwr] + 1
 
-            port = pkt[TCP].dport
+            port = pkt['TCP'].dport
             if port not in self.ports:
                 self.ports.append(port)
 
 
 
         elif self.prot == 'ICMP':
-            if pkt[ICMP].type == 8:
+            if pkt['ICMP'].type == 8:
                 self.IcmpCode[self.echoReq] = self.IcmpCode[self.echoReq] + 1
 
-            if pkt[ICMP].type == 0:
+            if pkt['ICMP'].type == 0:
                 self.IcmpCode[self.echoRply] = self.IcmpCode[self.echoRply] + 1
 
     def getAttr(self):
         global KALI_IP, L_VALUE
         self.interArrivalTime()
 
-        label = L_VALUE if int( (self.src == KALI_IP) or (self.dst == KALI_IP) ) else 0
+        label = L_VALUE if int( (self.src == KALI_IP) ) else 0
 
         featureList = [ label, self.__prot.index(self.prot) ]
 
@@ -194,8 +194,7 @@ class Flow:
     def matchAndAddPacket(self, pkt):
 
         if pkt.haslayer(self.prot):
-            if (self.src == pkt[IP].src and self.dst == pkt[IP].dst) or \
-                   (self.src == pkt[IP].dst and self.dst == pkt[IP].src):
+            if (self.src == pkt['IP'].src and self.dst == pkt['IP'].dst):
                 self.__time.append(pkt.time)
                 self.__pktLen.append(len(pkt))
 
@@ -287,7 +286,7 @@ if __name__ == "__main__":
 
     protocol = ['TCP']
     ft = Extractor(None, None, protocol, samplingTime)
-    ft.extractFeatures(pcap)
+    ft.extractFeatures()
 
     for feature in ft.featureList:
         print ",".join(map(str,feature))
