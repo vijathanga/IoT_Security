@@ -2,6 +2,7 @@
 
 import json
 import argparse
+import os
 
 import extractor as ext
 import predictor as prd
@@ -18,8 +19,8 @@ KEY_LABEL = "label"
 KEY_ATTACK_IP = "attackIP"
 KEY_PARSE = "parse"
 
-CONF_FILE = "./conf.json"
-FEATURE_FILE = "./features.csv"
+CONF_FILE = "./res/conf.json"
+FEATURE_FILE = "./res/features.csv"
 
 
 def parseArguments():
@@ -27,6 +28,7 @@ def parseArguments():
 
     parser.add_argument("-e", "--extract", action="store_true", help="extract Features from pcap files")
     parser.add_argument("-n", "--no_prediction", action="store_true", help="turn off prediction")
+    parser.add_argument("-d", "--delete", action="store_true", help="delete previous feature file")
     parser.add_argument("-c", "--conf", type=str, help="conf file location (default: ./conf.json)")
     parser.add_argument("-f", "--feature", type=str, help="feature file location (default: ./features.csv)")
 
@@ -59,9 +61,6 @@ def extractFeatures(confFile):
     attackIp = ""
     parse = ""
 
-    features = []
-
-
     confJson = parseJson(confFile)
 
     if confJson != False:
@@ -71,6 +70,8 @@ def extractFeatures(confFile):
         for meta in confJson[KEY_META]:
             pcapFile = meta[KEY_FILE]
             parse = meta[KEY_PARSE]
+            
+            features = []
 
             if parse:
                 print "Extracting features from \"" + pcapFile + "\""
@@ -78,15 +79,18 @@ def extractFeatures(confFile):
                 label = meta[KEY_LABEL]
                 attackIp = meta[KEY_ATTACK_IP]
 
-                feature = ext.extractOffline(pcapFile, samplingTime, protocol, attackIp, label)
-                features.extend(feature)
+                features = ext.extractOffline(pcapFile, samplingTime, protocol, attackIp, label)
+                
+                print "Extracted features - %d\n" % (len(features))
+
+                # Write to file
+                with open(FEATURE_FILE, 'a') as f:
+                    for feature in features:
+                        f.write( ",".join(map(str,feature)) + '\n')
             else:
-                print "Skipping " + pcapFile
+                print "Skipping " + pcapFile + "\n"
             
 
-    with open(FEATURE_FILE, 'w') as f:
-        for feature in features:
-            f.write( ",".join(map(str,feature)) + '\n')
 
 
 if __name__ == '__main__':
@@ -98,6 +102,10 @@ if __name__ == '__main__':
 
     if args.feature:
         FEATURE_FILE = args.feature
+
+    if args.delete:
+        if os.path.isfile(FEATURE_FILE):
+            os.remove(FEATURE_FILE)
 
     if args.extract:
         extractFeatures(CONF_FILE)

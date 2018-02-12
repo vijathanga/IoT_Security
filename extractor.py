@@ -5,7 +5,8 @@ import numpy as np
 
 
 ATTR = ["label", "prot", "syn", "fin", "rst", "psh", "ack", "urg", "ece", "cwr", "echoReq", "echoRply",
-              "arrTime", "meanPktLen", "varPktLen", "totPkt", "totBytes"]
+                 "meanArrTime", "varArrTime", "minArrTime", "maxArrTime", 
+                 "meanPktLen",  "varPktLen",  "minBytes",   "maxBytes",   "totPkt", "totBytes"]
 
 KALI_IP = ''
 L_VALUE = 0
@@ -69,8 +70,9 @@ class Flow:
         # ICMP attributes
         self.IcmpCode = [0] * 2
 
-        self.__time = []          # Arrival times of pkts in current session
-        self.__pktLen = []        # Len of pkts in current session
+        self.__time = []                # Arrival times of pkts in current session
+        self.__pktLen = []              # Len of pkts in current session
+        self.__interArrivalTime = []
         self.rawPackets = []
 
         self.matchAndAddPacket(pkt)
@@ -81,15 +83,26 @@ class Flow:
     def interArrivalTime(self):
 
         if len(self.__time) <= 1:
-            return 0
+            self.__interArrivalTime.append(0)
+            return
+
+        self.__time.sort()
         
-        count = len(self.__time) - 1
-        arrivalTime = 0.0
-
         for i in range(1, len(self.__time)):
-            arrivalTime += self.__time[i] - self.__time[i-1]
+            interval = self.__time[i] - self.__time[i-1]
+            self.__interArrivalTime.append( abs(interval) )
 
-        return arrivalTime / count
+    def meanInterArrTime(self):
+        return np.mean(self.__interArrivalTime)
+
+    def varInterArrTime(self):
+        return np.var(self.__interArrivalTime)
+
+    def minInterArrTime(self):
+        return min(self.__interArrivalTime)
+
+    def maxInterArrTime(self):
+        return max(self.__interArrivalTime)
 
     def meanPktLen(self):
         pktLenSum = 0.0
@@ -97,10 +110,16 @@ class Flow:
         if len(self.__pktLen) == 0:
             return 0
 
-        return sum(self.__pktLen) / len(self.__pktLen)
+        return np.mean(self.__pktLen)
 
     def varPktLen(self):
         return np.var(self.__pktLen)
+
+    def minBytes(self):
+        return min(self.__pktLen)
+    
+    def maxBytes(self):
+        return max(self.__pktLen)
 
     def totalPkts(self):
         return len(self.__pktLen)
@@ -145,6 +164,7 @@ class Flow:
 
     def getAttr(self):
         global KALI_IP, L_VALUE
+        self.interArrivalTime()
 
         label = L_VALUE if int( (self.src == KALI_IP) or (self.dst == KALI_IP) ) else 0
 
@@ -158,9 +178,14 @@ class Flow:
         featureList.extend(self.IcmpCode)
 
         # Flow statistics
-        featureList.extend([self.interArrivalTime(),
+        featureList.extend([self.meanInterArrTime(),
+                            self.varInterArrTime(),
+                            self.minInterArrTime(),
+                            self.maxInterArrTime(),
                             self.meanPktLen(),
                             self.varPktLen(),
+                            self.minBytes(),
+                            self.maxBytes(),
                             self.totalPkts(),
                             self.totalBytes()])
 
@@ -183,9 +208,10 @@ class Flow:
 
 class Extractor:
 
-    def __init__(self, ip, controllerIP, protocol, sampling = 0):
+    def __init__(self, pcapFile, ip, controllerIP, protocol, sampling = 0):
         self.flows = []
         self.featureList = []
+        self.pcapFile = pcapFile
 
         self.includeFilter = Filter()
         self.includeFilter.prot = protocol
@@ -197,54 +223,53 @@ class Extractor:
         # Used for offline extraction (Time in seconds)
         self.samplingTime = sampling
 
-    def extractFeatures(self, pcap):
+    def extractFeatures(self):
         self.flows = []
         self.featureList = []
+        sessTime = None
 
-        sessTime = pcap[0].time + self.samplingTime
 
-        for packet in pcap:
+        with PcapReader(self.pcapFile) as pcap:
+            for packet in pcap:
+                if sessTime == None:
+                    sessTime = packet.time + self.samplingTime
 
-            if (self.samplingTime != 0) and (packet.time > sessTime):
-                for f in self.flows:
-                    self.featureList.append(f.getAttr())
+                if (self.samplingTime != 0) and (packet.time > sessTime):
+                    for f in self.flows:
+                        self.featureList.append(f.getAttr())
 
-                self.flows = []
-                sessTime = sessTime + self.samplingTime
+                    self.flows = []
+                    sessTime = sessTime + self.samplingTime
 
-            # Exclude Filter for controller IP
-            if (self.samplingTime == 0) and self.excludeFilter.match(packet):
-                continue
+                # Exclude Filter for controller IP
+                if (self.samplingTime == 0) and self.excludeFilter.match(packet):
+                    continue
 
-            if self.includeFilter.match(packet):
+                if self.includeFilter.match(packet):
 
-                matched = False
-                for f in self.flows:
-                    if f.matchAndAddPacket(packet):
-                        matched = True
-                        break
+                    matched = False
+                    for f in self.flows:
+                        if f.matchAndAddPacket(packet):
+                            matched = True
+                            break
 
-                if not matched:
-                    newFlow = Flow(packet)
-                    self.flows.append(newFlow)
+                    if not matched:
+                        newFlow = Flow(packet)
+                        self.flows.append(newFlow)
 
         if not self.featureList:
             for f in self.flows:
                 self.featureList.append(f.getAttr())
 
 
-
-
 def extractOffline(pcapFile, samplingTime, prot, kaliIp, labelValue):
     global KALI_IP, L_VALUE
-
-    pcap = rdpcap(pcapFile)
 
     KALI_IP = kaliIp
     L_VALUE = labelValue
 
-    ft = Extractor(None, None, prot, samplingTime)
-    ft.extractFeatures(pcap)
+    ft = Extractor(pcapFile, None, None, prot, samplingTime)
+    ft.extractFeatures()
 
     return ft.featureList
 

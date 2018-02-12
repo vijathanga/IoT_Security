@@ -66,7 +66,6 @@ class Predictor:
             print(classification_report(Y_test, Y_pred, target_names=target_names))
 
 
-
 if __name__ == '__main__':
 
     pred = Predictor('test.csv')
