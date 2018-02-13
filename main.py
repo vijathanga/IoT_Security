@@ -17,6 +17,7 @@ KEY_META = "metadata"
 KEY_FILE = "file"
 KEY_LABEL = "label"
 KEY_ATTACK_IP = "attackIP"
+KEY_ATTACK_PROT = "attackProt"
 KEY_PARSE = "parse"
 
 CONF_FILE = "./res/conf.json"
@@ -53,42 +54,41 @@ def parseJson(fileName):
     return confJson[KEY_CONF]
 
 def extractFeatures(confFile):
-    samplingTime = 0
-    protocol = []
-
-    pcapFile = ""
-    label = ""
-    attackIp = ""
     parse = ""
 
     confJson = parseJson(confFile)
 
-    if confJson != False:
-        samplingTime = confJson[KEY_SAMPLING]
-        protocol = confJson[KEY_PROTOCOL]
+    if confJson == False:
+        print "Parsing of conf.json failed!"
 
-        for meta in confJson[KEY_META]:
-            pcapFile = meta[KEY_FILE]
-            parse = meta[KEY_PARSE]
+    eArgs = ext.ExtractorArgs()
+
+    eArgs.samplingTime = confJson[KEY_SAMPLING]
+    eArgs.protocol = confJson[KEY_PROTOCOL]
+
+    for meta in confJson[KEY_META]:
+        eArgs.pcapFile = meta[KEY_FILE]
+        parse = meta[KEY_PARSE]
+        
+        features = []
+
+        if parse:
+            print "Extracting features from \"" + eArgs.pcapFile + "\""
+
+            eArgs.label = meta[KEY_LABEL]
+            eArgs.attackIP = meta[KEY_ATTACK_IP]
+            eArgs.attackProt = meta[KEY_ATTACK_PROT]
+
+            features = ext.extractAttributes(eArgs)
             
-            features = []
+            print "Extracted features - %d\n" % (len(features))
 
-            if parse:
-                print "Extracting features from \"" + pcapFile + "\""
-
-                label = meta[KEY_LABEL]
-                attackIp = meta[KEY_ATTACK_IP]
-
-                features = ext.extractOffline(pcapFile, samplingTime, protocol, attackIp, label)
-                
-                print "Extracted features - %d\n" % (len(features))
-
-                # Write to file
-                with open(FEATURE_FILE, 'a') as f:
-                    for feature in features:
-                        f.write( ",".join(map(str,feature)) + '\n')
-            else:
-                print "Skipping " + pcapFile + "\n"
+            # Write to file
+            with open(FEATURE_FILE, 'a') as f:
+                for feature in features:
+                    f.write( ",".join(map(str,feature)) + '\n')
+        else:
+            print "Skipping " + eArgs.pcapFile + "\n"
             
 
 

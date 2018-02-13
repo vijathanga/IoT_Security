@@ -8,10 +8,16 @@ ATTR = ["label", "prot", "syn", "fin", "rst", "psh", "ack", "urg", "ece", "cwr",
                  "meanArrTime", "varArrTime", "minArrTime", "maxArrTime", 
                  "meanPktLen",  "varPktLen",  "minBytes",   "maxBytes",   "totPkt", "totBytes"]
 
-KALI_IP = ''
-L_VALUE = 0
-
-
+class ExtractorArgs:
+    def __init__(self):
+        self.pcapFile = None
+        self.pcap = None
+        self.deviceIP = None
+        self.protocol = []
+        self.samplingTime = 0
+        self.attackIP = None
+        self.attackProtocol = None
+        self.label = None
 
 class Filter:
     def __init__(self):
@@ -57,7 +63,9 @@ class Flow:
 
     __prot = [ 'nil', 'ICMP', 'ARP', 'UDP', 'SDP', 'EFK', 'TCP' ]
 
-    def __init__(self, pkt):
+    def __init__(self, pkt, initFeatures):
+        self.featureList = initFeatures
+
         self.src = pkt['IP'].src
         self.dst = pkt['IP'].dst
 
@@ -127,7 +135,7 @@ class Flow:
     def totalBytes(self):
         return sum(self.__pktLen)
 
-    def extractAttr(self, pkt):
+    def extractPacket(self, pkt):
 
         if self.prot == 'TCP':
             flag = pkt['TCP'].flags
@@ -163,33 +171,30 @@ class Flow:
                 self.IcmpCode[self.echoRply] = self.IcmpCode[self.echoRply] + 1
 
     def getAttr(self):
-        global KALI_IP, L_VALUE
         self.interArrivalTime()
 
-        label = L_VALUE if int( (self.src == KALI_IP) ) else 0
-
-        featureList = [ label, self.__prot.index(self.prot) ]
+        self.featureList.append (self.__prot.index(self.prot))
 
         # TCP attributes
-        featureList.extend(self.TcpFlag)
+        self.featureList.extend(self.TcpFlag)
         #featureList.append(self.tcpPorts())
 
         # ICMP attributes
-        featureList.extend(self.IcmpCode)
+        self.featureList.extend(self.IcmpCode)
 
         # Flow statistics
-        featureList.extend([self.meanInterArrTime(),
-                            self.varInterArrTime(),
-                            self.minInterArrTime(),
-                            self.maxInterArrTime(),
-                            self.meanPktLen(),
-                            self.varPktLen(),
-                            self.minBytes(),
-                            self.maxBytes(),
-                            self.totalPkts(),
-                            self.totalBytes()])
+        self.featureList.extend([self.meanInterArrTime(),
+                                 self.varInterArrTime(),
+                                 self.minInterArrTime(),
+                                 self.maxInterArrTime(),
+                                 self.meanPktLen(),
+                                 self.varPktLen(),
+                                 self.minBytes(),
+                                 self.maxBytes(),
+                                 self.totalPkts(),
+                                 self.totalBytes()])
 
-        return featureList
+        return self.featureList
 
     def matchAndAddPacket(self, pkt):
 
@@ -198,7 +203,7 @@ class Flow:
                 self.__time.append(pkt.time)
                 self.__pktLen.append(len(pkt))
 
-                self.extractAttr(pkt)
+                self.extractPacket(pkt)
                 # self.rawPackets.append(pkt)
 
                 return True
@@ -207,67 +212,87 @@ class Flow:
 
 class Extractor:
 
-    def __init__(self, pcapFile, ip, controllerIP, protocol, sampling = 0):
-        self.flows = []
+    def __init__(self, eArgs):
         self.featureList = []
-        self.pcapFile = pcapFile
+        self.flows = []
+        self.sessTime = None
+        self.online = eArgs.pcap != None
+
+        self.pcapFile = eArgs.pcapFile
+        self.pcap = eArgs.pcap
+        self.samplingTime = eArgs.samplingTime
+        self.label = eArgs.label
 
         self.includeFilter = Filter()
-        self.includeFilter.prot = protocol
-        self.includeFilter.devIP = ip
-        
-        self.excludeFilter = Filter()
-        self.excludeFilter.devIP = controllerIP
+        self.includeFilter.prot = eArgs.protocol
+        self.includeFilter.devIP = eArgs.deviceIP
 
-        # Used for offline extraction (Time in seconds)
-        self.samplingTime = sampling
+        self.labelFilter = Filter()
+        self.labelFilter.srcIP = eArgs.attackIP
+        self.labelFilter.prot = eArgs.attackProtocol
+
+    def extractPacket(self, packet):
+
+        # Sampling is only for offline extraction
+        if not self.online:
+            # First packet in pcap file
+            if self.sessTime == None:
+                self.sessTime = packet.time + self.samplingTime
+
+            # Initialize for next sampling period
+            if (packet.time > self.sessTime):
+                for f in self.flows:
+                    self.featureList.append(f.getAttr())
+
+                # Reset flows
+                self.flows = []
+                self.sessTime = self.sessTime + self.samplingTime
+
+        # Process packets which are matched by input filter
+        if self.includeFilter.match(packet):
+
+            # Look for a flow to which the packet belongs
+            matched = False
+            for f in self.flows:
+                if f.matchAndAddPacket(packet):
+                    matched = True
+                    break
+
+            # If no flows are found, create a new flow
+            if not matched:
+                # Initial features vary for online and offline flows
+                if self.online:
+                    initFeatures = [packet['IP'].src, packet['IP'].dst]
+                else:
+                    initFeatures = [self.label if self.labelFilter.match(packet) else 0]
+
+                # Add new flow to the flow list
+                newFlow = Flow(packet, initFeatures)
+                self.flows.append(newFlow)
 
     def extractFeatures(self):
-        self.flows = []
         self.featureList = []
-        sessTime = None
+        self.flows = []
+        self.sessTime = None
+
+        if self.online:
+            # Real time feature extraction
+            for packet in self.pcap:
+                self.extractPacket(packet)
+        else:
+            # Feature extraction from pcap
+            with PcapReader(self.pcapFile) as pcap:
+                for packet in pcap:
+                    self.extractPacket(packet)
+
+        # Append all features
+        for f in self.flows:
+            self.featureList.append(f.getAttr())
 
 
-        with PcapReader(self.pcapFile) as pcap:
-            for packet in pcap:
-                if sessTime == None:
-                    sessTime = packet.time + self.samplingTime
+def extractAttributes(extractorArgs):
 
-                if (self.samplingTime != 0) and (packet.time > sessTime):
-                    for f in self.flows:
-                        self.featureList.append(f.getAttr())
-
-                    self.flows = []
-                    sessTime = sessTime + self.samplingTime
-
-                # Exclude Filter for controller IP
-                if (self.samplingTime == 0) and self.excludeFilter.match(packet):
-                    continue
-
-                if self.includeFilter.match(packet):
-
-                    matched = False
-                    for f in self.flows:
-                        if f.matchAndAddPacket(packet):
-                            matched = True
-                            break
-
-                    if not matched:
-                        newFlow = Flow(packet)
-                        self.flows.append(newFlow)
-
-        if not self.featureList:
-            for f in self.flows:
-                self.featureList.append(f.getAttr())
-
-
-def extractOffline(pcapFile, samplingTime, prot, kaliIp, labelValue):
-    global KALI_IP, L_VALUE
-
-    KALI_IP = kaliIp
-    L_VALUE = labelValue
-
-    ft = Extractor(pcapFile, None, None, prot, samplingTime)
+    ft = Extractor(extractorArgs)
     ft.extractFeatures()
 
     return ft.featureList
@@ -276,17 +301,18 @@ def extractOffline(pcapFile, samplingTime, prot, kaliIp, labelValue):
 
 if __name__ == "__main__":
 
-    samplingTime = 1.0     # Sampling time
-
     #pcap_file = 'pcap/TCP/TCP_Dlink_camera.pcap'
-    pcap_file = 'pcap/PScan/PScan_Dlink_camera.pcap'
+    p = sniff(iface='ens33', timeout=10, count=50)
 
-    pcap = rdpcap(pcap_file)
-    #p = sniff(iface='ens33', timeout=5, count=50)
+    eArgs = ExtractorArgs()
+    #eArgs.samplingTime = 1
+    #eArgs.attackIP = "192.168.1.1"
+    #eArgs.pcapFile = 'pcap/test/test.pcap'
+    eArgs.protocol = ['TCP']
+    eArgs.pcap = p
+    #eArgs.label = 1
 
-    protocol = ['TCP']
-    ft = Extractor(None, None, protocol, samplingTime)
-    ft.extractFeatures()
+    ft = extractAttributes(eArgs)
 
-    for feature in ft.featureList:
+    for feature in ft:
         print ",".join(map(str,feature))
