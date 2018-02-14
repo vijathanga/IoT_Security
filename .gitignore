@@ -1,8 +1,5 @@
-pcap/*
-*.pkl
-*.pcap
+res/*
 *.pyc
-*.csv
 .vscode/launch.json
 .vscode/settings.json
 .vscode/.ropeproject/config.py
