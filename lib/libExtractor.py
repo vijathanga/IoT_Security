@@ -3,11 +3,6 @@
 from scapy.all import *
 import numpy as np
 
-
-ATTR = ["label", "prot", "syn", "fin", "rst", "psh", "ack", "urg", "ece", "cwr", "echoReq", "echoRply",
-                 "meanArrTime", "varArrTime", "minArrTime", "maxArrTime", 
-                 "meanPktLen",  "varPktLen",  "minBytes",   "maxBytes",   "totPkt", "totBytes"]
-
 class ExtractorArgs:
     def __init__(self):
         self.pcapFile = None
