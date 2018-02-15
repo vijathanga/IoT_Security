@@ -310,4 +310,4 @@ if __name__ == "__main__":
     ft = extractAttributes(eArgs)
 
     for feature in ft:
-        print ",".join(map(str,feature))
+        print (",".join(map(str,feature)))

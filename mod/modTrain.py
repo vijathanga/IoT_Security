@@ -19,7 +19,7 @@ def extractFeatures():
     # Delete old feature file if APPEND_FEATURES is disabled
     if not ct.APPEND_FEATURES:
         if os.path.isfile(ct.FEATURE_FILE):
-            print "Deleting old feature file - " + ct.FEATURE_FILE
+            print ("Deleting old feature file - " + ct.FEATURE_FILE)
             os.remove(ct.FEATURE_FILE)
 
     for pcap in ct.PCAPS:
@@ -29,7 +29,7 @@ def extractFeatures():
         features = []
 
         if parse:
-            print "Extracting features from \"" + eArgs.pcapFile + "\""
+            print ("Extracting features from \"" + eArgs.pcapFile + "\"")
 
             eArgs.label = pcap['label']
             eArgs.attackIP = pcap['attackIP']
@@ -38,14 +38,14 @@ def extractFeatures():
             # Extract features
             features = ext.extractAttributes(eArgs)
             
-            print "Extracted features - %d\n" % (len(features))
+            print ("Extracted features - %d\n" % (len(features)))
 
             # Append to file
             with open(ct.FEATURE_FILE, 'a') as f:
                 for feature in features:
                     f.write( ",".join(map(str, feature)) + '\n')
         else:
-            print "Skipping " + eArgs.pcapFile + "\n"
+            print ("Skipping " + eArgs.pcapFile + "\n")
             
 def run():
 

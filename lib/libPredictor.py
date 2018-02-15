@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
 import os
-import extractor as extr
 import pandas as pd
 import numpy as np
 import constant as ct
@@ -58,13 +57,13 @@ class Predictor:
 
 
         for clFile, name, classifier in zip(ct.CLASSIFIER_FILE, names, classifiers):
-            print name
+            print (name)
             clf = classifier.fit(X_train, Y_train)
 
-            print 'Accuracy - ' , clf.score(X_test, Y_test)
+            print ('Accuracy - ' , clf.score(X_test, Y_test))
             Y_pred = classifier.predict(X_test)
 
-            print(classification_report(Y_test, Y_pred, target_names=ct.LABELS))
+            print (classification_report(Y_test, Y_pred, target_names=ct.LABELS))
 
             filePath = os.path.join(ct.CLASSIFIER_PATH, clFile)
             joblib.dump(clf, filePath)

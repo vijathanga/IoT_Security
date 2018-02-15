@@ -10,10 +10,6 @@ sys.path.insert(0, "res")
 
 # Import constant and module files
 import constant as ct
-import modController as controller
-import modSwitch as switch
-import modTrain as train
-
 
 def parseArguments():
     parser = argparse.ArgumentParser()
@@ -27,11 +23,15 @@ def parseArguments():
 if __name__ == '__main__':
     args = parseArguments()
 
-    if args.controller:
-        controller.run()
-    elif args.switch:
-        switch.run()
-    elif args.train:
-        train.run()
-    else:
-        print "Choose a module to run. Check help for more details."
+    modules = ["modController", "modSwitch", "modTrain"]
+    options = [args.controller, args.switch, args.train]
+    mod = None
+
+    for opt, module in zip(options, modules):
+        if (opt):
+            mod = __import__(module)
+            mod.run()
+
+    
+    if not mod:
+        print ("Choose a valid module. Check help for more details")
