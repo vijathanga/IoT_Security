@@ -9,6 +9,7 @@ from sklearn import svm
 from sklearn.naive_bayes import *
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.externals import joblib
 
@@ -64,6 +65,7 @@ class Predictor:
             Y_pred = classifier.predict(X_test)
 
             print (classification_report(Y_test, Y_pred, target_names=ct.LABELS))
+            print (confusion_matrix(Y_test, Y_pred))
 
             filePath = os.path.join(ct.CLASSIFIER_PATH, clFile)
             joblib.dump(clf, filePath)

@@ -6,7 +6,7 @@ import argparse
 # Insert include path for modules
 sys.path.insert(0, "lib")
 sys.path.insert(0, "mod")
-sys.path.insert(0, "res")
+sys.path.insert(0, "etc")
 
 # Import constant and module files
 import constant as ct

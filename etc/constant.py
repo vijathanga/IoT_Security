@@ -10,7 +10,7 @@ CAPTURE_FILTER = 'tcp or icmp'
 
 
 # Training constants
-FEATURE_FILE = "./res/features.csv"
+FEATURE_FILE = "./res/features_5s.csv"
 SAMPLING_TIME = 2
 PROTOCOL = ["TCP", "ICMP"]
 APPEND_FEATURES = True
